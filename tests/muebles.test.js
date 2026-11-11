@@ -87,6 +87,18 @@ describe('Catalogo de muebles - API', () => {
     expect(mesas.body[0].nombre).toBe('Mesa Roble');
   });
 
+  // ADICION PRUEBA DE ERROR INTENCIONAL: el test de filtrado por precio maximo tiene un error en la expectativa de cantidad de resultados
+    test('GET /muebles?precio_max filtra por precio maximo', async () => {
+    await crearMueble({ nombre: 'Silla', precio: '200' });
+    await crearMueble({ nombre: 'Sofa', categoria: 'Sofas', precio: '1500' });
+    await crearMueble({ nombre: 'Mesa', categoria: 'Mesas', precio: '450' });
+    const res = await request(app).get('/muebles?precio_max=500');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.length).toBe(2);
+    const invalido = await request(app).get('/muebles?precio_max=abc');
+    expect(invalido.statusCode).toBe(400);
+  });
+
   test('GET /muebles/:id retorna el mueble o 404', async () => {
     await crearMueble();
     const ok = await request(app).get('/muebles/1');
