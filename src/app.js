@@ -137,3 +137,4 @@ function createApp(db, uploadDir = path.join(__dirname, '..', 'uploads')) {
 }
 
 module.exports = { createApp };
+const unusedVariable = 'esto causara un error de linting';
