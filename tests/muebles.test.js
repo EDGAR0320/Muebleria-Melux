@@ -94,7 +94,7 @@ describe('Catalogo de muebles - API', () => {
     await crearMueble({ nombre: 'Mesa', categoria: 'Mesas', precio: '450' });
     const res = await request(app).get('/muebles?precio_max=500');
     expect(res.statusCode).toBe(200);
-    expect(res.body.length).toBe(3); // ERROR INTENCIONAL: el valor correcto es 2
+    expect(res.body.length).toBe(2);
     const invalido = await request(app).get('/muebles?precio_max=abc');
     expect(invalido.statusCode).toBe(400);
   });
