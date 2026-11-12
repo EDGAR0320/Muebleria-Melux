@@ -432,7 +432,7 @@ cat package.json
 npm test
 ```
 **Resultado esperado:** `Tests: 12 passed, 12 total`.
-![Pruebas locales pasando](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image.png)
+![Pruebas locales pasando](img/image.png)
 
 > Descripción sugerida: "Se observa la salida de `npm test` con las 12 pruebas del catálogo de muebles aprobadas, antes de configurar el pipeline de CI."
 
@@ -470,7 +470,7 @@ ls uploads
 ```
 **Resultado esperado:** la creación responde `201` con un campo `imagen_url` del tipo `/uploads/<archivo>.jpg`; el archivo aparece en `uploads/` y, tras el `DELETE`, desaparece. Detén el servidor con `Ctrl + C`.
 
-![CRUD manual con curl](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy.png)
+![CRUD manual con curl](img/image%20copy.png)
 > Descripción sugerida: "Se observan las peticiones `curl` de creación (con imagen), lectura, actualización y borrado sobre `http://localhost:3000/muebles`, con sus respuestas."
 
 **11. Primer commit (incluye `package-lock.json`, indispensable para `npm ci`):**
@@ -535,7 +535,7 @@ git push origin main
 
 **Resultado esperado:** aparece la ejecución `CI Basico` en estado *en progreso* y luego con ✅. Al abrir el job `build-and-test` se ven los pasos *Checkout*, *Configurar Node.js*, *Instalar dependencias* y *Ejecutar pruebas* con sus logs.
 
-![Workflow básico en proceso](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%202.png)
+![Workflow básico en proceso](img/image%20copy%202.png)
 
 > Descripción sugerida: "Se observa en la pestaña Actions la ejecución del workflow `CI Basico`, primero en proceso y luego completada con éxito, y el detalle del job `build-and-test` con los logs de cada paso, incluyendo `12 passed` en la ejecución de pruebas."
 
@@ -577,7 +577,7 @@ npm run lint
 ```
 **Resultado esperado:** el comando termina sin mostrar errores ni advertencias.
 
-![Configuración de ESLint](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%203.png)
+![Configuración de ESLint](img/image%20copy%203.png)
 > Descripción sugerida: "Se observa el archivo `eslint.config.js` y la ejecución de `npm run lint` finalizando sin errores."
 
 **2. Agregar el paso de linting al workflow (antes de las pruebas):**
@@ -619,7 +619,7 @@ git push origin main
 ```
 **Resultado esperado:** en **Actions** la ejecución `CI con Linting` finaliza con ✅ y muestra el paso *Ejecutar linting* antes de *Ejecutar pruebas*.
 
-![Workflow con linting exitoso](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%204.png)
+![Workflow con linting exitoso](img/image%20copy%204.png)
 
 **3. Forzar un fallo intencional:** agregar una variable sin usar al final de `src/app.js`.
 ```bash
@@ -635,7 +635,7 @@ git push origin main
 ```
 **Resultado esperado:** en **Actions** el workflow **falla** (❌) en el paso *Ejecutar linting* y el paso *Ejecutar pruebas* ni siquiera se ejecuta.
 
-![Workflow fallido por linting](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%205.png)
+![Workflow fallido por linting](img/image%20copy%205.png)
 > Descripción sugerida: "Se observa en la pestaña Actions el workflow marcado con ❌ y, en el detalle del job, el paso *Ejecutar linting* en rojo con el error `no-unused-vars`, mientras que *Ejecutar pruebas* aparece omitido."
 
 **4. Revertir el error:**
@@ -645,7 +645,7 @@ git push origin main
 ```
 **Resultado esperado:** se crea un commit `Revert "test: fuerza un error de linting..."` y el workflow vuelve a pasar con ✅.
 
-![Historial con fallo y recuperación](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%206.png)
+![Historial con fallo y recuperación](img/image%20copy%206.png)
 > Descripción sugerida: "Se observa el historial de ejecuciones en Actions con la secuencia: ejecución exitosa, ejecución fallida por linting y ejecución exitosa tras el `git revert`."
 
 ---
@@ -674,7 +674,7 @@ npm run test:coverage
 ```
 **Resultado esperado:** una tabla de cobertura (con valores cercanos a `94 %` en sentencias, `82 %` en ramas, `100 %` en funciones y `97 %` en líneas), `Tests: 12 passed` y código de salida `0`.
 
-![Cobertura local](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%207.png)
+![Cobertura local](img/image%20copy%207.png)
 > Descripción sugerida: "Se observa la salida de `npm run test:coverage` con la tabla de cobertura por archivo (`app.js`, `db.js`) y el resumen global superando los umbrales configurados."
 
 **2. Reemplazar el workflow por la versión completa:**
@@ -740,7 +740,7 @@ git push origin main
 
 **Resultado esperado:** en **Actions** aparece la ejecución `CI Catalogo de Muebles` con **dos jobs en paralelo** (`Lint y pruebas (Node 22)` y `Lint y pruebas (Node 24)`) en ✅, y al final de la página de la ejecución una sección **Artifacts** con `coverage-node-22` y `coverage-node-24`.
 
-![Jobs paralelos con matriz](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%208.png)
+![Jobs paralelos con matriz](img/image%20copy%208.png)
 
 > Descripción sugerida: "Se observa la ejecución exitosa del workflow completo con los dos jobs de la matriz, el log del paso *Ejecutar pruebas con cobertura* mostrando la tabla de cobertura, y los artefactos `coverage-node-22` y `coverage-node-24` disponibles para descargar."
 
@@ -763,7 +763,7 @@ git push origin main
 
 **Resultado esperado:** la regla para `main` aparece listada y muestra los dos checks como obligatorios.
 
-![Regla de protección de rama](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%209.png)
+![Regla de protección de rama](img/image%20copy%209.png)
 > Descripción sugerida: "Se observa la configuración de la regla de protección de la rama `main` con *Require status checks to pass before merging* activado y los checks `Lint y pruebas (Node 22)` y `Lint y pruebas (Node 24)` seleccionados como obligatorios."
 
 ---
@@ -836,7 +836,7 @@ En GitHub pulsar **Compare & pull request**, título `feat: filtro por precio m�
 
 **Resultado esperado:** el workflow se ejecuta **automáticamente** sobre la PR, los checks `Lint y pruebas (Node 22/24)` fallan con ❌ y el botón de *merge* aparece **deshabilitado** con el mensaje *"Merging is blocked"* / *"Required statuses must pass before merging"*.
 
-![PR bloqueada por el CI](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%2011.png)
+![PR bloqueada por el CI](img/image%20copy%2011.png)
 > Descripción sugerida: "Se observa la pull request con los checks obligatorios fallidos y el botón de merge bloqueado por la regla de protección de rama."
 
 **5. Corregir el error:** cambiar `toBe(3)` por `toBe(2)` y eliminar el comentario del error intencional:
@@ -853,7 +853,7 @@ git push
 ```
 **Resultado esperado:** la PR se actualiza sola, el pipeline se vuelve a ejecutar y ambos checks pasan a ✅; el botón **Merge pull request** se habilita.
 
-![PR con checks exitosos](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%2012.png)
+![PR con checks exitosos](img/image%20copy%2012.png)
 > Descripción sugerida: "Se observa la misma pull request tras el commit de corrección, con los dos checks en verde y el botón de merge habilitado."
 
 **6. Fusionar la PR y actualizar el repositorio local:**
@@ -864,7 +864,7 @@ git log --oneline
 ```
 **Resultado esperado:** el historial de `main` incluye los commits de la feature y la ejecución posterior a la fusión aparece en **Actions** con ✅.
 
-![Historial final de Actions](/Lab5.1_CRUD_MELUX/Muebleria-Melux/img/image%20copy%2013.png)
+![Historial final de Actions](img/image%20copy%2013.png)
 > Descripción sugerida: "Se observa el historial completo de ejecuciones en la pestaña Actions: workflow básico, con linting, fallo intencional, recuperación, matriz con cobertura, PR fallida, PR exitosa y ejecución tras el merge."
 
 ---
@@ -901,6 +901,11 @@ EOF
 git add README.md INFORME.md img/
 git commit -m "docs: agrega informe del laboratorio 5.1 y readme"
 git push origin main
+
+git checkout -b docs/informe-lab5-1
+git push -u origin docs/informe-lab5-1
+
+#despues se crea el pull request en github
 ```
 > Como `main` está protegida, si GitHub rechaza el *push* directo, repite el flujo: rama `docs/informe` → *pull request* → esperar los checks → *merge*.
 
