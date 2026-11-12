@@ -82,12 +82,24 @@ function createApp(db, uploadDir = path.join(__dirname, '..', 'uploads')) {
 
   // READ (todos)
   app.get('/muebles', (req, res) => {
-    const { categoria } = req.query;
-    const filas = categoria
-      ? db.prepare('SELECT * FROM muebles WHERE categoria = ? ORDER BY id').all(categoria)
-      : db.prepare('SELECT * FROM muebles ORDER BY id').all();
+    const { categoria, precio_max: precioMax } = req.query;
+    const condiciones = [];
+    const params = [];
+    if (categoria) {
+      condiciones.push('categoria = ?');
+      params.push(categoria);
+    }
+    if (precioMax !== undefined) {
+      const max = Number(precioMax);
+      if (!Number.isFinite(max)) return res.status(400).json({ error: 'precio_max debe ser numerico' });
+      condiciones.push('precio <= ?');
+      params.push(max);
+    }
+    const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
+    const filas = db.prepare(`SELECT * FROM muebles ${where} ORDER BY id`).all(...params);
     res.json(filas.map(conUrl));
   });
+
 
   // READ (uno)
   app.get('/muebles/:id', (req, res) => {
