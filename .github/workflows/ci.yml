@@ -1,4 +1,4 @@
-name: CI Catalogo de Muebles
+name: LAB 5.1 + 5.2 - CI CD Catalogo de Muebles
 
 on:
   push:
@@ -6,41 +6,288 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: catalogo-muebles-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-test:
     name: Lint y pruebas (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
         node-version: [22, 24]
-
     steps:
-      - name: Checkout del codigo
+      - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Configurar Node.js ${{ matrix.node-version }}
+      - name: Node.js
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-
-      - name: Instalar dependencias
+      - name: Instalar dependencias exactas
         run: npm ci
-
-      - name: Verificar que los modulos cargan (build)
-        run: node -e "require('./src/app'); require('./src/db'); console.log('Modulos cargados correctamente')"
-
-      - name: Ejecutar linting
+      - name: Lint
         run: npm run lint
-
-      - name: Ejecutar pruebas con cobertura
+      - name: Pruebas y cobertura
         run: npm run test:coverage
-
-      - name: Publicar reporte de cobertura
+      - name: Guardar cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-node-${{ matrix.node-version }}
           path: coverage/
+          if-no-files-found: warn
+
+  build-and-push:
+    name: CD - Docker Build and Push
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Entrar en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build y push con version inmutable
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ vars.IMAGE_NAME }}:${{ github.sha }}
+            ${{ vars.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  scan:
+    name: CD - Analisis Trivy
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trivy - imagen publicada
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ vars.IMAGE_NAME }}:${{ github.sha }}
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  deploy-staging:
+    name: CD - Deploy staging
+    needs: scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    steps:
+      - name: Desplegar contenedor verificado por SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE: ${{ vars.IMAGE_NAME }}:${{ github.sha }}
+          DEPLOY_ENV: staging
+          PUBLIC_PORT: '8080'
+          CHECK_PORT: '13080'
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          # Recomendada: establecer SSH_FINGERPRINT por entorno.
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+          envs: IMAGE,DEPLOY_ENV,PUBLIC_PORT,CHECK_PORT
+          command_timeout: 12m
+          script: |
+            set -eu
+            APP="catalogo-muebles-${DEPLOY_ENV}"
+            PREV="${APP}-previous"
+            CAND="${APP}-candidate"
+            DATA_VOL="catalogo_${DEPLOY_ENV}_data"
+            UPLOAD_VOL="catalogo_${DEPLOY_ENV}_uploads"
+
+            echo "Desplegando $IMAGE en $DEPLOY_ENV"
+            docker pull "$IMAGE"
+            docker volume create "$DATA_VOL" >/dev/null
+            docker volume create "$UPLOAD_VOL" >/dev/null
+
+            # La validacion usa tmpfs independientes: nunca toca SQLite ni imagenes reales.
+            docker rm -f "$CAND" >/dev/null 2>&1 || true
+            cleanup() { docker rm -f "$CAND" >/dev/null 2>&1 || true; }
+            trap cleanup EXIT
+            docker run -d --name "$CAND" \
+              --tmpfs /data:rw,uid=1000,gid=1000 \
+              --tmpfs /app/uploads:rw,uid=1000,gid=1000 \
+              -e DB_FILE=/data/catalogo.db \
+              -p "127.0.0.1:${CHECK_PORT}:3000" "$IMAGE" >/dev/null
+            healthy=0
+            for i in $(seq 1 20); do
+              if curl --fail --silent --show-error --max-time 2 \
+                  "http://127.0.0.1:${CHECK_PORT}/health" >/dev/null 2>&1; then
+                healthy=1; break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" -ne 1 ]; then
+              docker logs "$CAND" || true
+              echo 'FALLO: candidato no supera el health check'
+              exit 1
+            fi
+            docker rm -f "$CAND" >/dev/null
+            trap - EXIT
+
+            # Conserva la version anterior detenida para recuperarla.
+            docker rm -f "$PREV" >/dev/null 2>&1 || true
+            if docker container inspect "$APP" >/dev/null 2>&1; then
+              docker rename "$APP" "$PREV"
+              docker stop "$PREV" >/dev/null
+            fi
+
+            if ! docker run -d --name "$APP" \
+              --restart unless-stopped \
+              -p "${PUBLIC_PORT}:3000" \
+              -e DB_FILE=/data/catalogo.db \
+              --mount "type=volume,source=${DATA_VOL},target=/data" \
+              --mount "type=volume,source=${UPLOAD_VOL},target=/app/uploads" \
+              "$IMAGE"; then
+              echo 'ERROR: no se pudo iniciar el nuevo contenedor'
+              docker rm -f "$APP" >/dev/null 2>&1 || true
+              if docker container inspect "$PREV" >/dev/null 2>&1; then
+                docker rename "$PREV" "$APP"; docker start "$APP"
+              fi
+              exit 1
+            fi
+
+            healthy=0
+            for i in $(seq 1 20); do
+              if curl --fail --silent --show-error --max-time 2 \
+                  "http://127.0.0.1:${PUBLIC_PORT}/health" >/dev/null 2>&1; then
+                healthy=1; break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" -ne 1 ]; then
+              echo 'ERROR: despliegue fallido, restaurando contenedor anterior'
+              docker logs "$APP" || true
+              docker rm -f "$APP" >/dev/null 2>&1 || true
+              if docker container inspect "$PREV" >/dev/null 2>&1; then
+                docker rename "$PREV" "$APP"; docker start "$APP"
+              fi
+              exit 1
+            fi
+            echo "OK: $APP ($IMAGE) publicado en puerto $PUBLIC_PORT"
+            docker ps --filter "name=^/${APP}$"
+
+  deploy-production:
+    name: CD - Deploy production
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Desplegar contenedor verificado por SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE: ${{ vars.IMAGE_NAME }}:${{ github.sha }}
+          DEPLOY_ENV: production
+          PUBLIC_PORT: '80'
+          CHECK_PORT: '13081'
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          # Recomendada: establecer SSH_FINGERPRINT por entorno.
+          fingerprint: ${{ secrets.SSH_FINGERPRINT }}
+          envs: IMAGE,DEPLOY_ENV,PUBLIC_PORT,CHECK_PORT
+          command_timeout: 12m
+          script: |
+            set -eu
+            APP="catalogo-muebles-${DEPLOY_ENV}"
+            PREV="${APP}-previous"
+            CAND="${APP}-candidate"
+            DATA_VOL="catalogo_${DEPLOY_ENV}_data"
+            UPLOAD_VOL="catalogo_${DEPLOY_ENV}_uploads"
+
+            echo "Desplegando $IMAGE en $DEPLOY_ENV"
+            docker pull "$IMAGE"
+            docker volume create "$DATA_VOL" >/dev/null
+            docker volume create "$UPLOAD_VOL" >/dev/null
+
+            # La validacion usa tmpfs independientes: nunca toca SQLite ni imagenes reales.
+            docker rm -f "$CAND" >/dev/null 2>&1 || true
+            cleanup() { docker rm -f "$CAND" >/dev/null 2>&1 || true; }
+            trap cleanup EXIT
+            docker run -d --name "$CAND" \
+              --tmpfs /data:rw,uid=1000,gid=1000 \
+              --tmpfs /app/uploads:rw,uid=1000,gid=1000 \
+              -e DB_FILE=/data/catalogo.db \
+              -p "127.0.0.1:${CHECK_PORT}:3000" "$IMAGE" >/dev/null
+            healthy=0
+            for i in $(seq 1 20); do
+              if curl --fail --silent --show-error --max-time 2 \
+                  "http://127.0.0.1:${CHECK_PORT}/health" >/dev/null 2>&1; then
+                healthy=1; break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" -ne 1 ]; then
+              docker logs "$CAND" || true
+              echo 'FALLO: candidato no supera el health check'
+              exit 1
+            fi
+            docker rm -f "$CAND" >/dev/null
+            trap - EXIT
+
+            # Conserva la version anterior detenida para recuperarla.
+            docker rm -f "$PREV" >/dev/null 2>&1 || true
+            if docker container inspect "$APP" >/dev/null 2>&1; then
+              docker rename "$APP" "$PREV"
+              docker stop "$PREV" >/dev/null
+            fi
+
+            if ! docker run -d --name "$APP" \
+              --restart unless-stopped \
+              -p "${PUBLIC_PORT}:3000" \
+              -e DB_FILE=/data/catalogo.db \
+              --mount "type=volume,source=${DATA_VOL},target=/data" \
+              --mount "type=volume,source=${UPLOAD_VOL},target=/app/uploads" \
+              "$IMAGE"; then
+              echo 'ERROR: no se pudo iniciar el nuevo contenedor'
+              docker rm -f "$APP" >/dev/null 2>&1 || true
+              if docker container inspect "$PREV" >/dev/null 2>&1; then
+                docker rename "$PREV" "$APP"; docker start "$APP"
+              fi
+              exit 1
+            fi
+
+            healthy=0
+            for i in $(seq 1 20); do
+              if curl --fail --silent --show-error --max-time 2 \
+                  "http://127.0.0.1:${PUBLIC_PORT}/health" >/dev/null 2>&1; then
+                healthy=1; break
+              fi
+              sleep 2
+            done
+            if [ "$healthy" -ne 1 ]; then
+              echo 'ERROR: despliegue fallido, restaurando contenedor anterior'
+              docker logs "$APP" || true
+              docker rm -f "$APP" >/dev/null 2>&1 || true
+              if docker container inspect "$PREV" >/dev/null 2>&1; then
+                docker rename "$PREV" "$APP"; docker start "$APP"
+              fi
+              exit 1
+            fi
+            echo "OK: $APP ($IMAGE) publicado en puerto $PUBLIC_PORT"
+            docker ps --filter "name=^/${APP}$"
