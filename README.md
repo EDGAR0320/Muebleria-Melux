@@ -28,7 +28,7 @@ La ruta `/health` devuelve el estado de la API. El endpoint `/muebles` permite c
 
 Los informes incluyen procedimientos, código y evidencias de GitHub Actions, Docker Hub, Trivy y AWS EC2.
 
-- [Ver informe del Laboratorio 5.1](./INFORME.md)
+- [Ver informe del Laboratorio 5.1](./INFORME5.1.md)
 - [Ver informe del Laboratorio 5.2](./INFORME5.2.md)
 
 **Workflow CI/CD:** [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
