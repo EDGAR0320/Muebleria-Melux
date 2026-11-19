@@ -63,10 +63,7 @@ function createApp(db, uploadDir = path.join(__dirname, '..', 'uploads')) {
   };
 
   app.get('/health', (req, res) => {
-    res.status(200).json({ 
-      status: 'ok', 
-      version: '1.0.0', 
-      message: 'Servidor funcionando correctamente' });
+    res.status(200).json({ status: 'ok', version: '2.0.0', message: 'Servidor funcionando correctamente'});
   });
 
   // CREATE
